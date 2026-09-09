@@ -4,23 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RailAI Pro: Intelligent Transit Optimizer</title>
-  
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <style>
-    @media print {
-      body * { visibility: hidden; }
-      #printableDossier, #printableDossier * { visibility: visible; }
-      #printableDossier { position: absolute; left: 0; top: 0; width: 100%; }
-    }
-  </style>
+  <link rel="icon" href="data:;base64,iVBORw0KGgo=">
 </head>
 <body class="bg-slate-100 text-slate-900 font-sans min-h-screen">
 
-  <!-- TOP APP BAR -->
   <header class="bg-slate-900 text-white border-b-2 border-orange-500 py-3 px-6 sticky top-0 z-40 shadow">
     <div class="max-w-7xl mx-auto flex justify-between items-center">
       <div class="flex items-center space-x-3">
@@ -34,33 +25,14 @@
       </div>
       <div class="text-xs flex items-center gap-3">
         <span class="bg-slate-800 text-emerald-400 px-3 py-1 rounded-full border border-slate-700 flex items-center gap-1">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> Live Delays Synchronized
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> Live Backend Sync
         </span>
       </div>
     </div>
   </header>
 
   <main class="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-    
-    <!-- LEFT PANEL: CONFIG & SEARCH (5 COLS) -->
     <div class="lg:col-span-5 space-y-4">
-      
-      <!-- NLP Search Box -->
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-        <label class="block text-xs font-bold text-slate-700 uppercase mb-1.5 flex items-center gap-1.5">
-          <i data-lucide="bot" class="w-4 h-4 text-orange-500"></i> AI Natural Language Search
-        </label>
-        <div class="relative">
-          <input type="text" id="nlpInput" 
-            placeholder="e.g. Find me a reliable route from Aurangabad to Guwahati"
-            class="w-full pl-3 pr-20 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 outline-none">
-          <button onclick="parseNLPQuery()" class="absolute right-1.5 top-1.5 bg-slate-900 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-slate-800 transition">
-            Parse
-          </button>
-        </div>
-      </div>
-
-      <!-- Structured Parameters Form -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3.5">
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -82,12 +54,8 @@
             </select>
           </div>
           <div>
-            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Goal</label>
-            <select id="priorityGoal" class="w-full px-2.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg outline-none font-semibold">
-              <option value="recommended">AI Recommended</option>
-              <option value="fastest">Fastest Time</option>
-              <option value="reliable">Max Reliability</option>
-            </select>
+            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Engine</label>
+            <input type="text" readonly value="Render API Live" class="w-full px-2.5 py-2 text-xs bg-slate-100 text-slate-500 border border-slate-300 rounded-lg outline-none">
           </div>
         </div>
 
@@ -96,44 +64,26 @@
         </button>
       </div>
 
-      <!-- Interactive Route Map -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-            <i data-lucide="map" class="w-4 h-4 text-orange-500"></i> Track Topology & Live Waypoints
-          </span>
-        </div>
         <div id="routeMap" class="w-full h-64 rounded-lg z-10 border border-slate-200"></div>
       </div>
-
     </div>
 
-    <!-- RIGHT PANEL: RESULTS & DOSSIER (7 COLS) -->
     <div class="lg:col-span-7 space-y-4">
-      
-      <div class="flex justify-between items-center bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
-        <div>
-          <h2 class="text-xs font-bold text-slate-800">Connection Intelligence Dossier</h2>
-          <p class="text-[11px] text-slate-500">Includes real-time risk scores & interchange layovers</p>
-        </div>
-        <button onclick="window.print()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-300 flex items-center gap-1.5 transition">
-          <i data-lucide="printer" class="w-4 h-4"></i> Export / Print Itinerary
-        </button>
-      </div>
-
       <div id="printableDossier" class="space-y-4"></div>
-
     </div>
   </main>
 
   <script>
+    const API_BASE_URL = "https://railai-project.onrender.com/api/v1";
+
     const STATIONS_GEO = {
-      'AWB': { name: 'Aurangabad', lat: 19.8762, lon: 75.3433, code: 'AWB' },
-      'NGP': { name: 'Nagpur Jn', lat: 21.1528, lon: 79.0882, code: 'NGP' },
-      'GHY': { name: 'Guwahati', lat: 26.1824, lon: 91.7506, code: 'GHY' },
-      'NDLS': { name: 'New Delhi', lat: 28.6427, lon: 77.2198, code: 'NDLS' },
-      'ET': { name: 'Itarsi Jn', lat: 22.6120, lon: 77.7610, code: 'ET' },
-      'MMCT': { name: 'Mumbai Central', lat: 18.9696, lon: 72.8193, code: 'MMCT' }
+      'AWB': { name: 'Aurangabad', lat: 19.8762, lon: 75.3433 },
+      'NGP': { name: 'Nagpur Jn', lat: 21.1528, lon: 79.0882 },
+      'GHY': { name: 'Guwahati', lat: 26.1824, lon: 91.7506 },
+      'NDLS': { name: 'New Delhi', lat: 28.6427, lon: 77.2198 },
+      'ET':  { name: 'Itarsi Jn', lat: 22.6120, lon: 77.7610 },
+      'MMCT': { name: 'Mumbai Central', lat: 18.9696, lon: 72.8193 }
     };
 
     let mapInstance = null;
@@ -141,229 +91,88 @@
     function initMap() {
       mapInstance = L.map('routeMap').setView([22.5, 82.0], 4);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO'
+        attribution: '&copy; OpenStreetMap'
       }).addTo(mapInstance);
     }
 
-    function parseNLPQuery() {
-      const q = document.getElementById('nlpInput').value.toLowerCase();
-      if (q.includes('mumbai') || q.includes('mmct')) {
-        document.getElementById('fromInput').value = 'Mumbai Central (MMCT)';
-      } else if (q.includes('aurangabad') || q.includes('awb')) {
-        document.getElementById('fromInput').value = 'Aurangabad (AWB)';
-      }
-      
-      if (q.includes('guwahati') || q.includes('ghy')) {
-        document.getElementById('toInput').value = 'Guwahati (GHY)';
-      } else if (q.includes('delhi') || q.includes('ndls')) {
-        document.getElementById('toInput').value = 'New Delhi (NDLS)';
-      }
-
-      if (q.includes('fast') || q.includes('quick')) {
-        document.getElementById('priorityGoal').value = 'fastest';
-      } else if (q.includes('reliable') || q.includes('safe')) {
-        document.getElementById('priorityGoal').value = 'reliable';
-      }
-
-      // Live Render Backend Base URL
-const API_BASE_URL = "https://railai-project.onrender.com/api/v1";
-
-const STATIONS_GEO = {
-  'AWB': { name: 'Aurangabad', lat: 19.8762, lon: 75.3433, code: 'AWB' },
-  'NGP': { name: 'Nagpur Jn', lat: 21.1528, lon: 79.0882, code: 'NGP' },
-  'GHY': { name: 'Guwahati', lat: 26.1824, lon: 91.7506, code: 'GHY' },
-  'NDLS': { name: 'New Delhi', lat: 28.6427, lon: 77.2198, code: 'NDLS' },
-  'ET':  { name: 'Itarsi Jn', lat: 22.6120, lon: 77.7610, code: 'ET' },
-  'MMCT': { name: 'Mumbai Central', lat: 18.9696, lon: 72.8193, code: 'MMCT' }
-};
-
-let mapInstance = null;
-
-function initMap() {
-  mapInstance = L.map('routeMap').setView([22.5, 82.0], 4);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap &copy; CARTO'
-  }).addTo(mapInstance);
-}
-
-// Helper: extracts "AWB" from "Aurangabad (AWB)"
-function extractStationCode(text) {
-  const match = text.match(/\(([A-Z]+)\)/);
-  return match ? match[1] : text.trim().toUpperCase();
-}
-
-async function runSearch() {
-  const dossier = document.getElementById('printableDossier');
-  const fromCode = extractStationCode(document.getElementById('fromInput').value);
-  const toCode = extractStationCode(document.getElementById('toInput').value);
-  const maxChanges = document.getElementById('maxChanges').value || 2;
-
-  // Show loading spinner
-  dossier.innerHTML = `
-    <div class="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">
-      <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-orange-500 border-t-transparent mb-2"></div>
-      <p class="text-xs font-semibold">Querying live optimization engine on Render...</p>
-    </div>
-  `;
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/routes?origin=${fromCode}&destination=${toCode}&max_changes=${maxChanges}`);
-    
-    if (!response.ok) {
-      throw new Error(`Server returned status ${response.status}`);
+    function extractStationCode(text) {
+      const match = text.match(/\(([A-Z]+)\)/);
+      return match ? match[1] : text.trim().toUpperCase();
     }
 
-    const data = await response.json();
-    renderDossier(data, fromCode, toCode);
-  } catch (err) {
-    dossier.innerHTML = `
-      <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-700">
-        <strong>Error reaching backend:</strong> ${err.message}. 
-        <br><span class="text-[11px] text-red-500">Note: Free Render instances sleep after 15 minutes of inactivity and take ~30-50s to wake up on the first request.</span>
-      </div>
-    `;
-  }
-}
-
-function renderDossier(data, origin, dest) {
-  const dossier = document.getElementById('printableDossier');
-  
-  // Build Leg Cards
-  let legsHtml = '';
-  let mapCoords = [];
-
-  if (data.legs && data.legs.length > 0) {
-    data.legs.forEach((leg, index) => {
-      legsHtml += `
-        <div class="border border-slate-200 rounded-lg p-3 bg-slate-50 mb-3">
-          <div class="flex justify-between text-xs font-bold text-slate-800 mb-1">
-            <span>Leg ${index + 1}: ${leg.train_number} - ${leg.train_name}</span>
-            <span class="text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded text-[10px]">Punctuality: ${leg.punctuality_score || 85}%</span>
-          </div>
-          <div class="grid grid-cols-2 text-xs text-slate-600 mt-2">
-            <div>Dep: <strong>${leg.departure_time}</strong> (${leg.from_station})</div>
-            <div class="text-right">Arr: <strong>${leg.arrival_time}</strong> (${leg.to_station})</div>
-          </div>
-        </div>
-      `;
-
-      if (STATIONS_GEO[leg.from_station]) {
-        mapCoords.push([STATIONS_GEO[leg.from_station].lat, STATIONS_GEO[leg.from_station].lon]);
-      }
-      if (STATIONS_GEO[leg.to_station]) {
-        mapCoords.push([STATIONS_GEO[leg.to_station].lat, STATIONS_GEO[leg.to_station].lon]);
-      }
-    });
-  } else {
-    legsHtml = `<p class="text-xs text-slate-600">No direct connection found for the selected parameters.</p>`;
-  }
-
-  dossier.innerHTML = `
-    <div class="bg-white rounded-xl border border-orange-400/80 p-5 shadow-sm space-y-4">
-      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-        <div>
-          <span class="bg-orange-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">Live Route</span>
-          <h3 class="text-sm font-bold text-slate-900 mt-1">${origin} → ${dest}</h3>
-        </div>
-        <div class="text-right">
-          <span class="text-xs text-slate-500">Reliability:</span>
-          <span class="text-sm font-black text-slate-800 ml-1">${data.reliability_score || 94}%</span>
-        </div>
-      </div>
-      <div>${legsHtml}</div>
-    </div>
-  `;
-
-  // Redraw polyline on map
-  if (mapInstance && mapCoords.length > 1) {
-    mapInstance.eachLayer(layer => {
-      if (layer instanceof L.Polyline || layer instanceof L.CircleMarker) {
-        mapInstance.removeLayer(layer);
-      }
-    });
-    L.polyline(mapCoords, { color: '#F97316', weight: 4 }).addTo(mapInstance);
-    mapCoords.forEach(pt => {
-      L.circleMarker(pt, { radius: 6, color: '#0F172A', fillColor: '#F97316', fillOpacity: 1 }).addTo(mapInstance);
-    });
-    mapInstance.fitBounds(mapCoords, { padding: [30, 30] });
-  }
-
-  lucide.createIcons();
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-  initMap();
-  lucide.createIcons();
-  runSearch();
-});
-    }
-
-    function runSearch() {
+    async function runSearch() {
       const dossier = document.getElementById('printableDossier');
-      
+      const fromCode = extractStationCode(document.getElementById('fromInput').value);
+      const toCode = extractStationCode(document.getElementById('toInput').value);
+      const maxChanges = document.getElementById('maxChanges').value || 2;
+
       dossier.innerHTML = `
-        <div class="bg-white rounded-xl border border-orange-400/80 p-5 shadow-sm space-y-4">
-          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-            <div>
-              <span class="bg-orange-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">AI Optimal Choice</span>
-              <h3 class="text-sm font-bold text-slate-900 mt-1">Aurangabad (AWB) → Guwahati (GHY)</h3>
-            </div>
-            <div class="text-right">
-              <span class="text-xs text-slate-500">AI Score:</span>
-              <span class="text-sm font-black text-slate-800 ml-1">94/100</span>
-            </div>
-          </div>
-
-          <div class="p-3 bg-slate-50 rounded-lg text-xs text-slate-700">
-            <strong>AI Optimization Summary:</strong> Connects via Nagpur Junction with a 195 min scheduled layover (180 min effective buffer after accounting for live +15m delay). Connection success probability is <strong>94% (Low Risk)</strong>.
-          </div>
-
-          <!-- Leg 1 -->
-          <div class="border border-slate-200 rounded-lg p-3 bg-slate-50">
-            <div class="flex justify-between text-xs font-bold text-slate-800 mb-1">
-              <span>Leg 1: Train 11201 (Nagpur Express)</span>
-              <span class="text-amber-700 bg-amber-100 px-2 py-0.5 rounded text-[10px]">+15m Current Delay</span>
-            </div>
-            <div class="grid grid-cols-2 text-xs text-slate-600 mt-2">
-              <div>Dep: <strong>21:25</strong> (Day 1) from Aurangabad (AWB)</div>
-              <div class="text-right">Arr: <strong>08:15</strong> (Day 2) at Nagpur Jn (NGP)</div>
-            </div>
-          </div>
-
-          <!-- Transfer -->
-          <div class="bg-emerald-50 border-l-4 border-emerald-500 p-2.5 rounded text-xs flex justify-between items-center text-emerald-900">
-            <span>Interchange at <strong>Nagpur Jn</strong> (Effective Buffer: 180 min)</span>
-            <span class="font-bold text-[10px] bg-emerald-200 px-2 py-0.5 rounded">94% Success Probability</span>
-          </div>
-
-          <!-- Leg 2 -->
-          <div class="border border-slate-200 rounded-lg p-3 bg-slate-50">
-            <div class="flex justify-between text-xs font-bold text-slate-800 mb-1">
-              <span>Leg 2: Train 12509 (Guwahati Superfast)</span>
-              <span class="text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded text-[10px]">On Schedule</span>
-            </div>
-            <div class="grid grid-cols-2 text-xs text-slate-600 mt-2">
-              <div>Dep: <strong>11:30</strong> (Day 2) from Nagpur Jn (NGP)</div>
-              <div class="text-right">Arr: <strong>04:15</strong> (Day 4) at Guwahati (GHY)</div>
-            </div>
-          </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-600">
+          <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-orange-500 border-t-transparent mb-3"></div>
+          <p class="text-xs font-semibold">Contacting Render API (${fromCode} to ${toCode})...</p>
+          <p class="text-[11px] text-slate-400 mt-1">If Render was idle, please allow 30-40 seconds for it to wake up.</p>
         </div>
       `;
 
-      if (mapInstance) {
-        const points = [
-          [STATIONS_GEO.AWB.lat, STATIONS_GEO.AWB.lon],
-          [STATIONS_GEO.NGP.lat, STATIONS_GEO.NGP.lon],
-          [STATIONS_GEO.GHY.lat, STATIONS_GEO.GHY.lon]
-        ];
+      try {
+        const url = `${API_BASE_URL}/routes?origin=${fromCode}&destination=${toCode}&max_changes=${maxChanges}`;
+        console.log("Triggering fetch to:", url);
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+        const data = await response.json();
+        renderResults(data, fromCode, toCode);
+      } catch (err) {
+        console.error("Fetch failed:", err);
+        dossier.innerHTML = `
+          <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-700">
+            <strong>Connection Failed:</strong> ${err.message}.<br>
+            <span class="text-[11px] text-red-500">Check if CORS is enabled on the backend or verify if the service is awake.</span>
+          </div>
+        `;
+      }
+    }
 
-        L.polyline(points, { color: '#F97316', weight: 4 }).addTo(mapInstance);
-        points.forEach(p => {
-          L.circleMarker(p, { radius: 6, color: '#0F172A', fillColor: '#F97316', fillOpacity: 1 }).addTo(mapInstance);
+    function renderResults(data, origin, dest) {
+      const dossier = document.getElementById('printableDossier');
+      let legsHtml = '';
+      let mapCoords = [];
+
+      if (data.legs && data.legs.length > 0) {
+        data.legs.forEach((leg, i) => {
+          legsHtml += `
+            <div class="border border-slate-200 rounded-lg p-3 bg-slate-50 mb-2">
+              <div class="flex justify-between text-xs font-bold text-slate-800">
+                <span>Leg ${i + 1}: Train ${leg.train_number} - ${leg.train_name}</span>
+                <span class="text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded text-[10px]">Punctuality ${leg.punctuality_score}%</span>
+              </div>
+              <div class="grid grid-cols-2 text-xs text-slate-600 mt-2">
+                <div>Dep: <strong>${leg.departure_time}</strong> (${leg.from_station})</div>
+                <div class="text-right">Arr: <strong>${leg.arrival_time}</strong> (${leg.to_station})</div>
+              </div>
+            </div>
+          `;
+          if (STATIONS_GEO[leg.from_station]) mapCoords.push([STATIONS_GEO[leg.from_station].lat, STATIONS_GEO[leg.from_station].lon]);
+          if (STATIONS_GEO[leg.to_station]) mapCoords.push([STATIONS_GEO[leg.to_station].lat, STATIONS_GEO[leg.to_station].lon]);
         });
-        mapInstance.fitBounds(points, { padding: [30, 30] });
+      } else {
+        legsHtml = `<p class="text-xs text-slate-500">No route legs returned from engine.</p>`;
       }
 
+      dossier.innerHTML = `
+        <div class="bg-white rounded-xl border border-orange-400 p-5 shadow-sm space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <h3 class="text-sm font-bold text-slate-900">${origin} → ${dest}</h3>
+            <span class="text-xs font-bold text-slate-700">Reliability: ${data.reliability_score || 94}%</span>
+          </div>
+          <div>${legsHtml}</div>
+        </div>
+      `;
+
+      if (mapInstance && mapCoords.length > 1) {
+        L.polyline(mapCoords, { color: '#F97316', weight: 4 }).addTo(mapInstance);
+        mapInstance.fitBounds(mapCoords, { padding: [30, 30] });
+      }
       lucide.createIcons();
     }
 
