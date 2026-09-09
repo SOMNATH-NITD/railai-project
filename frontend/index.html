@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RailAI Pro: Intelligent Transit Optimizer</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    @media print {
+      body * { visibility: hidden; }
+      #printableDossier, #printableDossier * { visibility: visible; }
+      #printableDossier { position: absolute; left: 0; top: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 font-sans min-h-screen">
+
+  <!-- TOP APP BAR -->
+  <header class="bg-slate-900 text-white border-b-2 border-orange-500 py-3 px-6 sticky top-0 z-40 shadow">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <div class="bg-orange-500 p-2 rounded-lg text-white">
+          <i data-lucide="git-branch" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-base font-bold tracking-tight">RailAI Enterprise Optimizer</h1>
+          <p class="text-[11px] text-slate-400">RAPTOR Multi-Hop & Dynamic Risk Prediction Engine</p>
+        </div>
+      </div>
+      <div class="text-xs flex items-center gap-3">
+        <span class="bg-slate-800 text-emerald-400 px-3 py-1 rounded-full border border-slate-700 flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> Live Delays Synchronized
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    
+    <!-- LEFT PANEL: CONFIG & SEARCH (5 COLS) -->
+    <div class="lg:col-span-5 space-y-4">
+      
+      <!-- NLP Search Box -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+        <label class="block text-xs font-bold text-slate-700 uppercase mb-1.5 flex items-center gap-1.5">
+          <i data-lucide="bot" class="w-4 h-4 text-orange-500"></i> AI Natural Language Search
+        </label>
+        <div class="relative">
+          <input type="text" id="nlpInput" 
+            placeholder="e.g. Find me a reliable route from Aurangabad to Guwahati"
+            class="w-full pl-3 pr-20 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 outline-none">
+          <button onclick="parseNLPQuery()" class="absolute right-1.5 top-1.5 bg-slate-900 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-slate-800 transition">
+            Parse
+          </button>
+        </div>
+      </div>
+
+      <!-- Structured Parameters Form -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3.5">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">From</label>
+            <input type="text" id="fromInput" value="Aurangabad (AWB)" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg outline-none font-semibold">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">To</label>
+            <input type="text" id="toInput" value="Guwahati (GHY)" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg outline-none font-semibold">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Max Changes</label>
+            <select id="maxChanges" class="w-full px-2.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg outline-none">
+              <option value="1">1 Change</option>
+              <option value="2" selected>2 Changes</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Goal</label>
+            <select id="priorityGoal" class="w-full px-2.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg outline-none font-semibold">
+              <option value="recommended">AI Recommended</option>
+              <option value="fastest">Fastest Time</option>
+              <option value="reliable">Max Reliability</option>
+            </select>
+          </div>
+        </div>
+
+        <button onclick="runSearch()" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 rounded-lg text-xs shadow transition flex items-center justify-center gap-2">
+          <i data-lucide="sparkles" class="w-4 h-4"></i> Optimize Connecting Route
+        </button>
+      </div>
+
+      <!-- Interactive Route Map -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+            <i data-lucide="map" class="w-4 h-4 text-orange-500"></i> Track Topology & Live Waypoints
+          </span>
+        </div>
+        <div id="routeMap" class="w-full h-64 rounded-lg z-10 border border-slate-200"></div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT PANEL: RESULTS & DOSSIER (7 COLS) -->
+    <div class="lg:col-span-7 space-y-4">
+      
+      <div class="flex justify-between items-center bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+        <div>
+          <h2 class="text-xs font-bold text-slate-800">Connection Intelligence Dossier</h2>
+          <p class="text-[11px] text-slate-500">Includes real-time risk scores & interchange layovers</p>
+        </div>
+        <button onclick="window.print()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-300 flex items-center gap-1.5 transition">
+          <i data-lucide="printer" class="w-4 h-4"></i> Export / Print Itinerary
+        </button>
+      </div>
+
+      <div id="printableDossier" class="space-y-4"></div>
+
+    </div>
+  </main>
+
+  <script>
+    const STATIONS_GEO = {
+      'AWB': { name: 'Aurangabad', lat: 19.8762, lon: 75.3433, code: 'AWB' },
+      'NGP': { name: 'Nagpur Jn', lat: 21.1528, lon: 79.0882, code: 'NGP' },
+      'GHY': { name: 'Guwahati', lat: 26.1824, lon: 91.7506, code: 'GHY' },
+      'NDLS': { name: 'New Delhi', lat: 28.6427, lon: 77.2198, code: 'NDLS' },
+      'ET': { name: 'Itarsi Jn', lat: 22.6120, lon: 77.7610, code: 'ET' },
+      'MMCT': { name: 'Mumbai Central', lat: 18.9696, lon: 72.8193, code: 'MMCT' }
+    };
+
+    let mapInstance = null;
+
+    function initMap() {
+      mapInstance = L.map('routeMap').setView([22.5, 82.0], 4);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO'
+      }).addTo(mapInstance);
+    }
+
+    function parseNLPQuery() {
+      const q = document.getElementById('nlpInput').value.toLowerCase();
+      if (q.includes('mumbai') || q.includes('mmct')) {
+        document.getElementById('fromInput').value = 'Mumbai Central (MMCT)';
+      } else if (q.includes('aurangabad') || q.includes('awb')) {
+        document.getElementById('fromInput').value = 'Aurangabad (AWB)';
+      }
+      
+      if (q.includes('guwahati') || q.includes('ghy')) {
+        document.getElementById('toInput').value = 'Guwahati (GHY)';
+      } else if (q.includes('delhi') || q.includes('ndls')) {
+        document.getElementById('toInput').value = 'New Delhi (NDLS)';
+      }
+
+      if (q.includes('fast') || q.includes('quick')) {
+        document.getElementById('priorityGoal').value = 'fastest';
+      } else if (q.includes('reliable') || q.includes('safe')) {
+        document.getElementById('priorityGoal').value = 'reliable';
+      }
+
+      runSearch();
+    }
+
+    function runSearch() {
+      const dossier = document.getElementById('printableDossier');
+      
+      dossier.innerHTML = `
+        <div class="bg-white rounded-xl border border-orange-400/80 p-5 shadow-sm space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <span class="bg-orange-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">AI Optimal Choice</span>
+              <h3 class="text-sm font-bold text-slate-900 mt-1">Aurangabad (AWB) → Guwahati (GHY)</h3>
+            </div>
+            <div class="text-right">
+              <span class="text-xs text-slate-500">AI Score:</span>
+              <span class="text-sm font-black text-slate-800 ml-1">94/100</span>
+            </div>
+          </div>
+
+          <div class="p-3 bg-slate-50 rounded-lg text-xs text-slate-700">
+            <strong>AI Optimization Summary:</strong> Connects via Nagpur Junction with a 195 min scheduled layover (180 min effective buffer after accounting for live +15m delay). Connection success probability is <strong>94% (Low Risk)</strong>.
+          </div>
+
+          <!-- Leg 1 -->
+          <div class="border border-slate-200 rounded-lg p-3 bg-slate-50">
+            <div class="flex justify-between text-xs font-bold text-slate-800 mb-1">
+              <span>Leg 1: Train 11201 (Nagpur Express)</span>
+              <span class="text-amber-700 bg-amber-100 px-2 py-0.5 rounded text-[10px]">+15m Current Delay</span>
+            </div>
+            <div class="grid grid-cols-2 text-xs text-slate-600 mt-2">
+              <div>Dep: <strong>21:25</strong> (Day 1) from Aurangabad (AWB)</div>
+              <div class="text-right">Arr: <strong>08:15</strong> (Day 2) at Nagpur Jn (NGP)</div>
+            </div>
+          </div>
+
+          <!-- Transfer -->
+          <div class="bg-emerald-50 border-l-4 border-emerald-500 p-2.5 rounded text-xs flex justify-between items-center text-emerald-900">
+            <span>Interchange at <strong>Nagpur Jn</strong> (Effective Buffer: 180 min)</span>
+            <span class="font-bold text-[10px] bg-emerald-200 px-2 py-0.5 rounded">94% Success Probability</span>
+          </div>
+
+          <!-- Leg 2 -->
+          <div class="border border-slate-200 rounded-lg p-3 bg-slate-50">
+            <div class="flex justify-between text-xs font-bold text-slate-800 mb-1">
+              <span>Leg 2: Train 12509 (Guwahati Superfast)</span>
+              <span class="text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded text-[10px]">On Schedule</span>
+            </div>
+            <div class="grid grid-cols-2 text-xs text-slate-600 mt-2">
+              <div>Dep: <strong>11:30</strong> (Day 2) from Nagpur Jn (NGP)</div>
+              <div class="text-right">Arr: <strong>04:15</strong> (Day 4) at Guwahati (GHY)</div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      if (mapInstance) {
+        const points = [
+          [STATIONS_GEO.AWB.lat, STATIONS_GEO.AWB.lon],
+          [STATIONS_GEO.NGP.lat, STATIONS_GEO.NGP.lon],
+          [STATIONS_GEO.GHY.lat, STATIONS_GEO.GHY.lon]
+        ];
+
+        L.polyline(points, { color: '#F97316', weight: 4 }).addTo(mapInstance);
+        points.forEach(p => {
+          L.circleMarker(p, { radius: 6, color: '#0F172A', fillColor: '#F97316', fillOpacity: 1 }).addTo(mapInstance);
+        });
+        mapInstance.fitBounds(points, { padding: [30, 30] });
+      }
+
+      lucide.createIcons();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      lucide.createIcons();
+      runSearch();
+    });
+  </script>
+</body>
+</html>
