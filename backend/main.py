@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 app = FastAPI(title="RailAI Transit Engine")
 
-# Allow requests from your GitHub Pages frontend
+# Enable Cross-Origin Resource Sharing (CORS) for GitHub Pages
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,6 +14,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# -------------------------------------------------------------
+# DATA MODELS & SCHEMAS
+# -------------------------------------------------------------
 class Leg(BaseModel):
     train_number: str
     train_name: str
@@ -30,8 +33,35 @@ class RouteResponse(BaseModel):
     reliability_score: int
     legs: List[Leg]
 
-# Multi-hop timetable dataset
+# -------------------------------------------------------------
+# COMMON TYPO & ALIAS RESOLVER
+# -------------------------------------------------------------
+STATION_ALIASES = {
+    "MMTC": "MMCT",      # Common typo for Mumbai Central
+    "MUMBAI": "MMCT",
+    "BOMBAY": "MMCT",
+    "AURANGABAD": "AWB",
+    "NAGPUR": "NGP",
+    "GUWAHATI": "GHY",
+    "DELHI": "NDLS",
+    "NEW DELHI": "NDLS",
+    "ITARSI": "ET",
+}
+
+# -------------------------------------------------------------
+# IN-MEMORY SCHEDULE DATABASE
+# -------------------------------------------------------------
 SCHEDULES = [
+    # Direct Leg: Aurangabad to Mumbai Central
+    {
+        "train_number": "12072",
+        "train_name": "Janshatabdi Express",
+        "from_station": "AWB",
+        "to_station": "MMCT",
+        "departure_time": "06:00",
+        "arrival_time": "12:30",
+        "punctuality_score": 95
+    },
     # Leg 1: Aurangabad to Nagpur
     {
         "train_number": "11401",
@@ -52,60 +82,100 @@ SCHEDULES = [
         "arrival_time": "23:30",
         "punctuality_score": 84
     },
-    # Direct leg: Aurangabad to Mumbai
+    # Leg 1 Alternative: Aurangabad to Itarsi
     {
-        "train_number": "12072",
-        "train_name": "Janshatabdi Express",
+        "train_number": "12715",
+        "train_name": "Sachkhand Express",
         "from_station": "AWB",
-        "to_station": "MMCT",
-        "departure_time": "06:00",
-        "arrival_time": "12:30",
-        "punctuality_score": 95
+        "to_station": "ET",
+        "departure_time": "13:30",
+        "arrival_time": "21:10",
+        "punctuality_score": 90
+    },
+    # Leg 2 Alternative: Itarsi to New Delhi
+    {
+        "train_number": "12625",
+        "train_name": "Kerala Express",
+        "from_station": "ET",
+        "to_station": "NDLS",
+        "departure_time": "23:00",
+        "arrival_time": "13:40",
+        "punctuality_score": 87
     }
 ]
 
+# -------------------------------------------------------------
+# API ROUTE HANDLERS
+# -------------------------------------------------------------
 @app.get("/")
 def read_root():
-    return {"status": "online", "service": "RailAI Engine", "docs_url": "/docs"}
+    return {
+        "status": "online",
+        "service": "RailAI RAPTOR Optimization Engine",
+        "documentation": "/docs"
+    }
 
 @app.get("/api/v1/routes", response_model=RouteResponse)
 def get_routes(
-    origin: str = Query(..., description="Origin Station Code"),
-    destination: str = Query(..., description="Destination Station Code"),
+    origin: str = Query(..., description="Origin Station Code, e.g. AWB"),
+    destination: str = Query(..., description="Destination Station Code, e.g. MMCT or GHY"),
     max_changes: int = Query(2, ge=0, le=3)
 ):
+    # Normalize inputs
     origin = origin.upper().strip()
     destination = destination.upper().strip()
 
-    # 1. Check for a direct route
-    direct_legs = [s for s in SCHEDULES if s["from_station"] == origin and s["to_station"] == destination]
-    if direct_legs:
+    # Resolve typos or common station name variants
+    origin = STATION_ALIASES.get(origin, origin)
+    destination = STATION_ALIASES.get(destination, destination)
+
+    # 1. Direct Route Check
+    direct_matches = [
+        s for s in SCHEDULES 
+        if s["from_station"] == origin and s["to_station"] == destination
+    ]
+    if direct_matches:
+        leg_data = direct_matches[0]
         return RouteResponse(
             origin=origin,
             destination=destination,
             total_legs=1,
-            reliability_score=direct_legs[0]["punctuality_score"],
-            legs=direct_legs
+            reliability_score=leg_data["punctuality_score"],
+            legs=[Leg(**leg_data)]
         )
 
-    # 2. Check for a 1-stop transfer (Origin -> Intermediate -> Destination)
-    legs_from_origin = [s for s in SCHEDULES if s["from_station"] == origin]
-    for leg1 in legs_from_origin:
-        intermediate = leg1["to_station"]
-        legs_to_dest = [s for s in SCHEDULES if s["from_station"] == intermediate and s["to_station"] == destination]
+    # If user selected max 0 changes and no direct train, return empty
+    if max_changes == 0:
+        return RouteResponse(
+            origin=origin,
+            destination=destination,
+            total_legs=0,
+            reliability_score=0,
+            legs=[]
+        )
+
+    # 2. Single-Hop Transfer Check (Origin -> Intermediate Junction -> Destination)
+    departing_legs = [s for s in SCHEDULES if s["from_station"] == origin]
+    
+    for leg1 in departing_legs:
+        transfer_junction = leg1["to_station"]
+        connecting_legs = [
+            s for s in SCHEDULES 
+            if s["from_station"] == transfer_junction and s["to_station"] == destination
+        ]
         
-        if legs_to_dest:
-            leg2 = legs_to_dest[0]
-            avg_punctuality = int((leg1["punctuality_score"] + leg2["punctuality_score"]) / 2)
+        if connecting_legs:
+            leg2 = connecting_legs[0]
+            avg_score = int((leg1["punctuality_score"] + leg2["punctuality_score"]) / 2)
             return RouteResponse(
                 origin=origin,
                 destination=destination,
                 total_legs=2,
-                reliability_score=avg_punctuality,
+                reliability_score=avg_score,
                 legs=[Leg(**leg1), Leg(**leg2)]
             )
 
-    # 3. Fallback when no viable route sequence is found
+    # 3. Fallback when no viable route path is found
     return RouteResponse(
         origin=origin,
         destination=destination,
